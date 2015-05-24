@@ -18,6 +18,28 @@ type
 
 system.addQuitProc(resetAttributes)
 
+const version = "1.0.0"
+
+const usage = """FAR v""" & version & """ - Find & Replace Utility
+  (c) 2015 Fabio Cevasco
+
+  Usage:
+    far <pattern> [<replacement>] [option1 option2 ...]
+
+  Where:
+    <pattern>           A regular expression to search for
+    <replacement>       An optional replacement string
+
+  Options:
+    -a, --apply         Substitute all occurrences of <pattern> with <replacement> in all files
+                        without asking for confirmation.
+    -d, --directory     Search in the specified directory (default: .)
+    -f, --filter        Specify a regular expression to filter file paths.
+    -h, --help          Display this message.
+    -r, --recursive     Search directories recursively.
+    -t, --test          Do not perform substitutions, just print results.
+    -v, --version       Display the program version.
+"""
 
 proc matchBounds(str, regex: string, start = 0): StringBounds =
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
@@ -128,13 +150,20 @@ for kind, key, val in getOpt():
           options.apply = true
         of "test", "t":
           options.test = true
+        of "help", "h":
+          echo usage
+          quit(0)
+        of "version", "v":
+          echo version
+          quit(0)
         else:
           discard
     else:
       discard
 
 if options.regex == nil:
-  quit("No regex specified.", 2)
+  echo usage
+  quit(0)
 
 var scan: iterator(dir: string): string {.closure.}
 
