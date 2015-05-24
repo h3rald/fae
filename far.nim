@@ -14,6 +14,7 @@ type
     substitute: string
     directory: string
     apply: bool
+    test: bool
 
 system.addQuitProc(resetAttributes)
 
@@ -104,7 +105,7 @@ proc confirm(msg): bool =
 
 ## Processing Options
 
-var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".", apply: false)
+var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".", apply: false, test: false)
 
 for kind, key, val in getOpt():
   case kind:
@@ -125,6 +126,8 @@ for kind, key, val in getOpt():
           options.directory = val
         of "apply", "a":
           options.apply = true
+        of "test", "t":
+          options.test = true
         else:
           discard
     else:
@@ -171,7 +174,7 @@ for f in scan(options.directory):
         var replacement = contents.replace(options.regex, options.substitute, matchstart)
         var new_offset = options.substitute.len-(matchend-matchstart+1)
         displayMatch(replacement, matchstart, matchend+new_offset, fgYellow)
-        if options.apply or confirm("Confirm replacement? [Y/n] "):
+        if (not options.test) and (options.apply or confirm("Confirm replacement? [Y/n] ")):
           f.writefile(replacement)
           contents = f.readFile()
           offset = offset + new_offset 
