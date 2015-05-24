@@ -40,6 +40,14 @@ const usage = """FAR v""" & version & """ - Find & Replace Utility
     -t, --test          Do not perform substitutions, just print results.
     -v, --version       Display the program version.
 """
+#define SLRE_UNEXPECTED_QUANTIFIER  -2
+#define SLRE_UNBALANCED_BRACKETS    -3
+#define SLRE_INTERNAL_ERROR         -4
+#define SLRE_INVALID_CHARACTER_SET  -5
+#define SLRE_INVALID_METACHARACTER  -6
+#define SLRE_CAPS_ARRAY_TOO_SMALL   -7
+#define SLRE_TOO_MANY_BRANCHES      -8
+#define SLRE_TOO_MANY_BRACKETS      -9
 
 proc matchBounds(str, regex: string, start = 0): StringBounds =
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
@@ -48,7 +56,25 @@ proc matchBounds(str, regex: string, start = 0): StringBounds =
   if match >= 0:
     result = [match-c[0].len+start, match-1+start]
   else:
-    result = [-1, match]
+    case match:
+      of -2:
+        quit("Regex Error: Unexpected quantifier", match)
+      of -3:
+        quit("Regex Error: Unbalanced brackets", match)
+      of -4:
+        quit("Regex Error: Internal error", match)
+      of -5:
+        quit("Regex Error: Invalid character set", match)
+      of -6:
+        quit("Regex Error: Invalid metacharacter", match)
+      of -7:
+        quit("Regex Error: Too many captures (max: 9)", match)
+      of -8:
+        quit("Regex Error: Too many branches", match)
+      of -9:
+        quit("Regex Error: Too many brackets", match)
+      else:
+        result = [-1, match]
 
 proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds]) =
   let match = str.matchBounds(regex, start)
@@ -64,7 +90,6 @@ proc replace(str, regex, substitute: string, start = 0): string =
     newstr.delete(match[0], match[1])
     newstr.insert(substitute, match[0])
   return newstr
-  
 
 proc match(str, regex: string, case_insensitive = 0): bool = 
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
