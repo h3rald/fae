@@ -213,5 +213,3 @@ for f in scan(options.directory):
   matches = newSeq[StringBounds](0)
 
 echo "=== ", count, " files processed."
-  
-
