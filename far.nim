@@ -3,7 +3,8 @@ import
   parseopt2,
   os,
   terminal,
-  strutils
+  strutils,
+  times
 
 type
   StringBounds = array[0..1, int]
@@ -113,18 +114,7 @@ proc replace(str, regex: string, substitute: var string, start = 0): string =
     newstr.rawReplace(substitute, match.start, match.finish)
   return newstr
 
-proc countLines(s: string, first, last: int): int = 
-  var i = first
-  while i <= last:
-    if s[i] == '\13': 
-      inc result
-      if i < last and s[i+1] == '\10': inc(i)
-    elif s[i] == '\10': 
-      inc result
-    inc i
-  inc result
-
-proc displayMatch(str: string, start, finish: int, color = fgYellow) =
+proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int) =
   let max_extra_chars = 20
   let context_start = max(start-max_extra_chars, 0)
   let context_finish = min(finish+max_extra_chars, str.len)
@@ -136,14 +126,14 @@ proc displayMatch(str: string, start, finish: int, color = fgYellow) =
     context = context & "..."
   let match_context_start:int = strutils.find(context, match, start-context_start)
   let match_context_finish:int = match_context_start+match.len
-  let line_n = $str.countLines(0, finish+1)
-  stdout.write("  ")
+  #let lineN = $str.countLines(0, finish+1)
+  stdout.write(" ")
   setForegroundColor(color, true)
-  for i in 0..line_n.len:
-    stdout.write(line_n[i])
+  #for i in 0..lineN:
+  stdout.write(lineN)
   resetAttributes()
   stdout.write(": ")
-  context = strutils.replace(context, "\n", " ")
+  #context = strutils.replace(context, "\n", " ")
   for i in 0..context.len:
     if i == match_context_start:
       setForegroundColor(color, true)
@@ -158,9 +148,9 @@ proc displayFile(str: string) =
   for i in 0..str.len:
     stdout.write(str[i])
   resetAttributes()
-  stdout.write "]:\n"
+  stdout.write "]"
 
-proc confirm(msg): bool = 
+proc confirm(msg: string): bool = 
   stdout.write(msg)
   var answer = stdin.readLine()
   if answer.match("y(es)?", 1):
@@ -229,31 +219,43 @@ var contents = ""
 var contentsLen = 0
 var matches = newSeq[StringBounds](0)
 var count = 0
+var matchesN = 0
 
+var duration = cpuTime()
 
 for f in scan(options.directory):
   count.inc
-  contents = f.readfile()
-  contentsLen = contents.len
-  matchBoundsRec(contents, options.regex, 0, matches)
-  if matches.len > 0:
-    displayFile(f)
-    var offset = 0
-    var matchstart, matchend: int
-    for match in matches:
-      matchstart = match[0] + offset
-      matchend = match[1] + offset
-      if options.substitute != nil:
-        displayMatch(contents, matchstart, matchend, fgRed)
-        var replacement = contents.replace(options.regex, options.substitute, matchstart)
-        var new_offset = options.substitute.len-(matchend-matchstart+1)
-        displayMatch(replacement, matchstart, matchend+new_offset, fgYellow)
-        if (not options.test) and (options.apply or confirm("Confirm replacement? [Y/n] ")):
-          f.writefile(replacement)
-          contents = f.readFile()
-          offset = offset + new_offset 
-      else:
-        displayMatch(contents, match[0], match[1])
-  matches = newSeq[StringBounds](0)
+  contents = ""
+  var lineN = 0
+  var file: File
+  if not file.open(f):
+    continue
+  while file.readline(contents):
+    lineN.inc
+    contentsLen = contents.len
+    matchBoundsRec(contents, options.regex, 0, matches)
+    if matches.len > 0:
+      var offset = 0
+      var matchstart, matchend: int
+      for match in matches:
+        matchesN.inc
+        matchstart = match[0] + offset
+        matchend = match[1] + offset
+        displayFile(f)
+        if options.substitute != nil:
+          displayMatch(contents, matchstart, matchend, fgRed, lineN)
+          var substitute = options.substitute
+          var replacement = contents.replace(options.regex, substitute, matchstart)
+          var new_offset = substitute.len-(matchend-matchstart+1)
+          for i in 0..(f.len+1):
+            stdout.write(" ")
+          displayMatch(replacement, matchstart, matchend+new_offset, fgYellow, lineN)
+          if (not options.test) and (options.apply or confirm("Confirm replacement? [Y/n] ")):
+            f.writefile(replacement)
+            contents = f.readFile()
+            offset = offset + new_offset 
+        else:
+          displayMatch(contents, match[0], match[1], fgYellow, lineN)
+    matches = newSeq[StringBounds](0)
 
-echo "=== ", count, " files processed."
+echo "=== ", count, " files processed - ", matchesN, " matches found (", (cpuTime()-duration).int, "s)."
