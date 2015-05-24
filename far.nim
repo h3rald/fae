@@ -13,6 +13,7 @@ type
     filter: string
     substitute: string
     directory: string
+    apply: bool
 
 system.addQuitProc(resetAttributes)
 
@@ -30,21 +31,21 @@ proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds
   let match = str.matchBounds(regex, start)
   if match[0] >= 0:
     matches.add(match)
-    matchBoundsRec(str, regex, start+match[1]+1, matches)
+    matchBoundsRec(str, regex, match[1]+1, matches)
 
 # Simple replace with no capture support
 proc replace(str, regex, substitute: string, start = 0): string =
   let match = str.matchBounds(regex, start)
   var newstr = str
-  if match[0] >= 0:
+  if match[1] >= 0:
     newstr.delete(match[0], match[1])
     newstr.insert(substitute, match[0])
   return newstr
   
 
-proc match(str, regex: string): bool = 
+proc match(str, regex: string, case_insensitive = 0): bool = 
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-  return slre_match(regex.cstring, str.cstring, str.len.cint, c, 10, 0) >= 0
+  return slre_match(regex.cstring, str.cstring, str.len.cint, c, 10, case_insensitive.cint) >= 0
 
 proc countLines(s: string, first, last: int): int = 
   var i = first
@@ -91,10 +92,19 @@ proc displayFile(str: string) =
   resetAttributes()
   stdout.write "]:\n"
 
+proc confirm(msg): bool = 
+  stdout.write(msg)
+  var answer = stdin.readLine()
+  if answer.match("y(es)?", 1):
+    return true
+  elif answer.match("n(o)?", 1):
+    return false
+  else:
+    return confirm(msg)
 
 ## Processing Options
 
-var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".")
+var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".", apply: false)
 
 for kind, key, val in getOpt():
   case kind:
@@ -113,6 +123,8 @@ for kind, key, val in getOpt():
           options.filter = val
         of "directory", "d":
           options.directory = val
+        of "apply", "a":
+          options.apply = true
         else:
           discard
     else:
@@ -134,10 +146,6 @@ else:
       if kind == pcFile and (options.filter == nil or path.match(options.filter)):
         yield path
 
-# test
-
-# test
-
 ## MAIN
 
 var contents = ""
@@ -153,10 +161,20 @@ for f in scan(options.directory):
   matchBoundsRec(contents, options.regex, 0, matches)
   if matches.len > 0:
     displayFile(f)
+    var offset = 0
+    var matchstart, matchend: int
     for match in matches:
+      matchstart = match[0] + offset
+      matchend = match[1] + offset
       if options.substitute != nil:
-        displayMatch(contents, match[0], match[1], fgRed)
-        displayMatch(contents.replace(options.regex, options.substitute, match[0]), match[0], match[0]+options.substitute.len-1, fgYellow)
+        displayMatch(contents, matchstart, matchend, fgRed)
+        var replacement = contents.replace(options.regex, options.substitute, matchstart)
+        var new_offset = options.substitute.len-(matchend-matchstart+1)
+        displayMatch(replacement, matchstart, matchend+new_offset, fgYellow)
+        if options.apply or confirm("Confirm replacement? [Y/n] "):
+          f.writefile(replacement)
+          contents = f.readFile()
+          offset = offset + new_offset 
       else:
         displayMatch(contents, match[0], match[1])
   matches = newSeq[StringBounds](0)
