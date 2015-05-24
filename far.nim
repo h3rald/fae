@@ -7,6 +7,10 @@ import
 
 type
   StringBounds = array[0..1, int]
+  StringMatches = object
+    start: int
+    finish: int
+    captures: ptr array[0..9, Capture]
   FarOptions = object
     regex: string
     recursive: bool
@@ -40,14 +44,27 @@ const usage = """FAR v""" & version & """ - Find & Replace Utility
     -t, --test          Do not perform substitutions, just print results.
     -v, --version       Display the program version.
 """
-#define SLRE_UNEXPECTED_QUANTIFIER  -2
-#define SLRE_UNBALANCED_BRACKETS    -3
-#define SLRE_INTERNAL_ERROR         -4
-#define SLRE_INVALID_CHARACTER_SET  -5
-#define SLRE_INVALID_METACHARACTER  -6
-#define SLRE_CAPS_ARRAY_TOO_SMALL   -7
-#define SLRE_TOO_MANY_BRANCHES      -8
-#define SLRE_TOO_MANY_BRACKETS      -9
+
+proc handleRegexErrors(match: int, ): StringBounds =
+  case match:
+    of -2:
+      quit("Regex Error: Unexpected quantifier", match)
+    of -3:
+      quit("Regex Error: Unbalanced brackets", match)
+    of -4:
+      quit("Regex Error: Internal error", match)
+    of -5:
+      quit("Regex Error: Invalid character set", match)
+    of -6:
+      quit("Regex Error: Invalid metacharacter", match)
+    of -7:
+      quit("Regex Error: Too many captures (max: 9)", match)
+    of -8:
+      quit("Regex Error: Too many branches", match)
+    of -9:
+      quit("Regex Error: Too many brackets", match)
+    else:
+      result = [-1, match]
 
 proc matchBounds(str, regex: string, start = 0): StringBounds =
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
@@ -56,25 +73,16 @@ proc matchBounds(str, regex: string, start = 0): StringBounds =
   if match >= 0:
     result = [match-c[0].len+start, match-1+start]
   else:
-    case match:
-      of -2:
-        quit("Regex Error: Unexpected quantifier", match)
-      of -3:
-        quit("Regex Error: Unbalanced brackets", match)
-      of -4:
-        quit("Regex Error: Internal error", match)
-      of -5:
-        quit("Regex Error: Invalid character set", match)
-      of -6:
-        quit("Regex Error: Invalid metacharacter", match)
-      of -7:
-        quit("Regex Error: Too many captures (max: 9)", match)
-      of -8:
-        quit("Regex Error: Too many branches", match)
-      of -9:
-        quit("Regex Error: Too many brackets", match)
-      else:
-        result = [-1, match]
+    result = match.handleRegexErrors()
+
+proc matchCaptures(str, regex: string, start = 0): StringMatches = 
+  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
+  var s = str.substr(start).cstring
+  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, 0)
+  if match >= 0: 
+    result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
+  else:
+    result = StringMatches(start: match, finish: match, captures: c)
 
 proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds]) =
   let match = str.matchBounds(regex, start)
@@ -82,18 +90,28 @@ proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds
     matches.add(match)
     matchBoundsRec(str, regex, match[1]+1, matches)
 
-# Simple replace with no capture support
-proc replace(str, regex, substitute: string, start = 0): string =
-  let match = str.matchBounds(regex, start)
-  var newstr = str
-  if match[1] >= 0:
-    newstr.delete(match[0], match[1])
-    newstr.insert(substitute, match[0])
-  return newstr
-
 proc match(str, regex: string, case_insensitive = 0): bool = 
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
   return slre_match(regex.cstring, str.cstring, str.len.cint, c, 10, case_insensitive.cint) >= 0
+
+proc rawReplace(str: var string, sub: string, start, finish: int) =
+  str.delete(start, finish)
+  str.insert(sub, start)
+
+proc replace(str, regex: string, substitute: var string, start = 0): string =
+  var newstr = str
+  let match = str.matchCaptures(regex, start)
+  if match.finish >= 0:
+    for i in 1..9:
+      # Substitute captures
+      var submatches = newSeq[StringBounds](0)
+      substitute.matchBoundsRec("\\\\" & $i, 0, submatches)
+      for submatch in submatches:
+        var capture = match.captures[i]
+        if capture.len > 0:
+          substitute.rawReplace(substr($capture.str, 0, (capture.len-1).int), submatch[0], submatch[1])
+    newstr.rawReplace(substitute, match.start, match.finish)
+  return newstr
 
 proc countLines(s: string, first, last: int): int = 
   var i = first
@@ -107,8 +125,9 @@ proc countLines(s: string, first, last: int): int =
   inc result
 
 proc displayMatch(str: string, start, finish: int, color = fgYellow) =
-  let context_start = max(start-10, 0)
-  let context_finish = min(finish+10, str.len)
+  let max_extra_chars = 20
+  let context_start = max(start-max_extra_chars, 0)
+  let context_finish = min(finish+max_extra_chars, str.len)
   let match: string = str.substr(start, finish)
   var context: string = str.substr(context_start, context_finish)
   if context_start > 0:
