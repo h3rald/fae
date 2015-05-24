@@ -43,8 +43,8 @@ const usage = """FAR v""" & version & """ - Find & Replace Utility
 
 proc matchBounds(str, regex: string, start = 0): StringBounds =
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-  var str = str.substr(start).cstring
-  let match = slre_match(("(" & regex & ")").cstring, str, str.len.cint, c, 10, 0)
+  var s = str.substr(start).cstring
+  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, 0)
   if match >= 0:
     result = [match-c[0].len+start, match-1+start]
   else:
@@ -79,6 +79,7 @@ proc countLines(s: string, first, last: int): int =
     elif s[i] == '\10': 
       inc result
     inc i
+  inc result
 
 proc displayMatch(str: string, start, finish: int, color = fgYellow) =
   let context_start = max(start-10, 0)
