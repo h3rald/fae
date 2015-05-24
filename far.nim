@@ -16,20 +16,31 @@ type
 
 system.addQuitProc(resetAttributes)
 
+
 proc matchBounds(str, regex: string, start = 0): StringBounds =
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
   var str = str.substr(start).cstring
-  let match = slre_match(("(" & regex & ")").cstring, str.cstring, str.len.cint, c, 10, 0)
+  let match = slre_match(("(" & regex & ")").cstring, str, str.len.cint, c, 10, 0)
   if match >= 0:
     result = [match-c[0].len+start, match-1+start]
   else:
     result = [-1, match]
 
 proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds]) =
-  let match = matchBounds(str, regex, start)
+  let match = str.matchBounds(regex, start)
   if match[0] >= 0:
     matches.add(match)
     matchBoundsRec(str, regex, start+match[1]+1, matches)
+
+# Simple replace with no capture support
+proc replace(str, regex, substitute: string, start = 0): string =
+  let match = str.matchBounds(regex, start)
+  var newstr = str
+  if match[0] >= 0:
+    newstr.delete(match[0], match[1])
+    newstr.insert(substitute, match[0])
+  return newstr
+  
 
 proc match(str, regex: string): bool = 
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
@@ -45,7 +56,7 @@ proc countLines(s: string, first, last: int): int =
       inc result
     inc i
 
-proc displayMatch(str: string, start, finish: int) =
+proc displayMatch(str: string, start, finish: int, color = fgYellow) =
   let context_start = max(start-10, 0)
   let context_finish = min(finish+10, str.len)
   let match: string = str.substr(start, finish)
@@ -54,19 +65,19 @@ proc displayMatch(str: string, start, finish: int) =
     context = "..." & context
   if context_finish < str.len:
     context = context & "..."
-  let match_context_start:int = strutils.find(context, match)
+  let match_context_start:int = strutils.find(context, match, start-context_start)
   let match_context_finish:int = match_context_start+match.len
   let line_n = $str.countLines(0, finish+1)
   stdout.write("  ")
-  setForegroundColor(fgYellow, true)
+  setForegroundColor(color, true)
   for i in 0..line_n.len:
     stdout.write(line_n[i])
   resetAttributes()
   stdout.write(": ")
-  context = context.replace("\n", " ")
+  context = strutils.replace(context, "\n", " ")
   for i in 0..context.len:
     if i == match_context_start:
-      setForegroundColor(fgYellow, true)
+      setForegroundColor(color, true)
     if i == match_context_finish:
       resetAttributes()
     stdout.write(context[i])
@@ -80,22 +91,26 @@ proc displayFile(str: string) =
   resetAttributes()
   stdout.write "]:\n"
 
-### MAIN
+
+## Processing Options
 
 var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".")
 
 for kind, key, val in getOpt():
   case kind:
     of cmdArgument:
-      options.regex = key
+      if options.regex == nil:
+        options.regex = key
+      elif options.substitute == nil:
+        options.substitute = key
+      elif options.regex == nil and options.substitute == nil:
+        quit("Too many arguments", 1)
     of cmdLongOption, cmdShortOption:
       case key:
         of "recursive", "r":
           options.recursive = true
         of "filter", "f":
           options.filter = val
-        of "substitute", "s":
-          options.substitute = val 
         of "directory", "d":
           options.directory = val
         else:
@@ -104,7 +119,7 @@ for kind, key, val in getOpt():
       discard
 
 if options.regex == nil:
-  quit("No regex specified.", 1)
+  quit("No regex specified.", 2)
 
 var scan: iterator(dir: string): string {.closure.}
 
@@ -123,10 +138,13 @@ else:
 
 # test
 
+## MAIN
+
 var contents = ""
 var contentsLen = 0
 var matches = newSeq[StringBounds](0)
 var count = 0
+
 
 for f in scan(options.directory):
   count.inc
@@ -136,9 +154,13 @@ for f in scan(options.directory):
   if matches.len > 0:
     displayFile(f)
     for match in matches:
-      displayMatch(contents, match[0], match[1])
+      if options.substitute != nil:
+        displayMatch(contents, match[0], match[1], fgRed)
+        displayMatch(contents.replace(options.regex, options.substitute, match[0]), match[0], match[0]+options.substitute.len-1, fgYellow)
+      else:
+        displayMatch(contents, match[0], match[1])
   matches = newSeq[StringBounds](0)
 
-echo "=== End: ", count, " files processed."
+echo "=== ", count, " files processed."
   
 
