@@ -71,9 +71,6 @@ proc handleRegexErrors(match: int): StringBounds =
     else:
       result = [-1, match]
 
-proc `$`(sb: StringBounds): string =
-  return "($1,$2)" % [$sb[0], $sb[1]]
-
 proc matchBounds(str, regex: string, start = 0, flags = 0): StringBounds =
   var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
   var s = str.substr(start).cstring
