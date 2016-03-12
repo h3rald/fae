@@ -200,19 +200,6 @@ if options.regex == nil:
   echo usage
   quit(0)
 
-var scan: iterator(dir: string): string {.closure.}
-
-if options.recursive:
-  scan = iterator (dir: string): string {.closure.}=
-    for path in walkDirRec(dir):
-      if options.filter == nil or path.match(options.filter):
-        yield path
-else:
-  scan = iterator (dir: string): string {.closure.} =
-    for kind, path in walkDir(dir):
-      if kind == pcFile and (options.filter == nil or path.match(options.filter)):
-        yield path
-
 ## MAIN
 
 var contents = ""
@@ -223,13 +210,13 @@ var matchesN = 0
 
 var duration = cpuTime()
 
-for f in scan(options.directory):
+proc processFile(f:string) =
   count.inc
   contents = ""
   var lineN = 0
   var file: File
   if not file.open(f):
-    continue
+    raise newException(IOError, "Unable to open file '$1'" % f)
   while file.readline(contents):
     lineN.inc
     contentsLen = contents.len
@@ -257,5 +244,22 @@ for f in scan(options.directory):
         else:
           displayMatch(contents, match[0], match[1], fgYellow, lineN)
     matches = newSeq[StringBounds](0)
+
+if options.recursive:
+  for f in walkDirRec(options.directory):
+    if options.filter == nil or f.match(options.filter):
+      try:
+        processFile(f)
+      except:
+        stderr.writeLine getCurrentExceptionMsg()
+        continue
+else:
+  for kind, f in walkDir(options.directory):
+    if kind == pcFile and (options.filter == nil or f.match(options.filter)):
+      try:
+        processFile(f)
+      except:
+        stderr.writeLine getCurrentExceptionMsg()
+        continue
 
 echo "=== ", count, " files processed - ", matchesN, " matches found (", (cpuTime()-duration).int, "s)."
