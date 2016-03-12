@@ -24,10 +24,10 @@ type
 
 system.addQuitProc(resetAttributes)
 
-const version = "1.0.0"
+const version = "1.1.0"
 
 const usage = """FAR v""" & version & """ - Find & Replace Utility
-  (c) 2015 Fabio Cevasco
+  (c) 2015-2016 Fabio Cevasco
 
   Usage:
     far <pattern> [<replacement>] [option1 option2 ...]
@@ -48,7 +48,7 @@ const usage = """FAR v""" & version & """ - Find & Replace Utility
     -v, --version       Display the program version.
 """
 
-proc handleRegexErrors(match: int, ): StringBounds =
+proc handleRegexErrors(match: int): StringBounds =
   case match:
     of -2:
       quit("Regex Error: Unexpected quantifier", match)
@@ -165,8 +165,9 @@ proc confirm(msg: string): bool =
   else:
     return confirm(msg)
 
-proc processFile(f:string, options: FarOptions): int =
+proc processFile(f:string, options: FarOptions): array[0..1, int] =
   var matchesN = 0
+  var subsN = 0
   var contents = ""
   var contentsLen = 0
   var lineN = 0
@@ -178,32 +179,32 @@ proc processFile(f:string, options: FarOptions): int =
     lineN.inc
     contentsLen = contents.len
     fileLines.add contents
-    var matches = newSeq[StringBounds](0)
-    matchBoundsRec(contents, options.regex, 0, matches, flags = options.flags)
-    if matches.len > 0:
-      matchesN = matchesN + matches.len
+    var match = matchBounds(contents, options.regex, 0, flags = options.flags)
+    while match[0] > 0:
+      matchesN.inc
       var offset = 0
       var matchstart, matchend: int
-      for match in matches:
-        matchstart = match[0] + offset
-        matchend = match[1] + offset
-        displayFile(f)
-        if options.substitute != nil:
-          displayMatch(contents, matchstart, matchend, fgRed, lineN)
-          var substitute = options.substitute
-          var replacement = contents.replace(options.regex, substitute, matchstart)
-          var new_offset = substitute.len-(matchend-matchstart+1)
-          for i in 0..(f.len+1):
-            stdout.write(" ")
-          displayMatch(replacement, matchstart, matchend+new_offset, fgYellow, lineN)
+      matchstart = match[0] 
+      matchend = match[1] 
+      displayFile(f)
+      if options.substitute != nil:
+        displayMatch(contents, matchstart, matchend, fgRed, lineN)
+        var substitute = options.substitute
+        var replacement = contents.replace(options.regex, substitute, matchstart)
+        offset = substitute.len-(matchend-matchstart+1)
+        for i in 0..(f.len+1):
+          stdout.write(" ")
+        displayMatch(replacement, matchstart, matchend+offset, fgYellow, lineN)
+        if (options.apply or confirm("Confirm replacement? [Y/n] ")):
+          subsN.inc
+          contents = replacement
           fileLines[fileLines.high] = replacement
-        else:
-          displayMatch(contents, match[0], match[1], fgYellow, lineN)
-    if (not options.test) and (options.substitute != nil) and (options.apply or confirm("Confirm replacement? [Y/n] ")):
-      f.writefile(fileLines.join("\n"))
-      #contents = f.readFile()
-      #offset = offset + new_offset 
-  return matchesN
+      else:
+        displayMatch(contents, match[0], match[1], fgYellow, lineN)
+      match = matchBounds(contents, options.regex, matchend+offset+1, flags = options.flags)
+  if (not options.test) and (options.substitute != nil): 
+    f.writefile(fileLines.join("\n"))
+  return [matchesN, subsN]
 
 ## MAIN
 
@@ -255,13 +256,17 @@ if options.regex == nil:
 
 var count = 0
 var matchesN = 0
+var subsN = 0
+var res: array[0..1, int]
 
 if options.recursive:
   for f in walkDirRec(options.directory):
     if options.filter == nil or f.match(options.filter):
       try:
         count.inc
-        matchesN = matchesN + processFile(f, options)
+        res = processFile(f, options)
+        matchesN = matchesN + res[0]
+        subsN = subsN + res[1]
       except:
         stderr.writeLine getCurrentExceptionMsg()
         continue
@@ -270,11 +275,16 @@ else:
     if kind == pcFile and (options.filter == nil or f.match(options.filter)):
       try:
         count.inc
-        matchesN = matchesN + processFile(f, options)
+        res = processFile(f, options)
+        matchesN = matchesN + res[0]
+        subsN = subsN + res[1]
       except:
         stderr.writeLine getCurrentExceptionMsg()
         continue
 
-echo "=== ", count, " files processed - ", matchesN, " matches found (", (cpuTime()-duration), " seconds)."
+if options.substitute != nil:
+  echo "=== ", count, " files processed - ", matchesN, " matches, ", subsN, " substitutions (", (cpuTime()-duration), " seconds)."
+else:
+  echo "=== ", count, " files processed - ", matchesN, " matches (", (cpuTime()-duration), " seconds)."
 
 
