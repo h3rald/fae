@@ -20,6 +20,7 @@ type
     directory: string
     apply: bool
     test: bool
+    silent: bool
     flags: int
 
 system.addQuitProc(resetAttributes)
@@ -44,6 +45,7 @@ const usage = """FAR v""" & version & """ - Find & Replace Utility
     -h, --help          Display this message.
     -i, --ignore-case   Case-insensitive matching.
     -r, --recursive     Search directories recursively.
+    -s, --silent        Do not display matches.
     -t, --test          Do not perform substitutions, just print results.
     -v, --version       Display the program version.
 """
@@ -119,7 +121,9 @@ proc replace(str, regex: string, substitute: var string, start = 0, flags = 0): 
     newstr.rawReplace(substitute, match.start, match.finish)
   return newstr
 
-proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int) =
+proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int, silent = false) =
+  if silent:
+    return
   let max_extra_chars = 20
   let context_start = max(start-max_extra_chars, 0)
   let context_finish = min(finish+max_extra_chars, str.len)
@@ -147,7 +151,9 @@ proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int)
     stdout.write(context[i])
   stdout.write("\n")
 
-proc displayFile(str: string) =
+proc displayFile(str: string, silent = false) =
+  if silent:
+    return
   stdout.write "["
   setForegroundColor(fgGreen, true)
   for i in 0..str.len:
@@ -186,8 +192,8 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
       var matchstart, matchend: int
       matchstart = match[0] 
       matchend = match[1] 
-      displayFile(f)
       if options.substitute != nil:
+        displayFile(f)
         displayMatch(contents, matchstart, matchend, fgRed, lineN)
         var substitute = options.substitute
         var replacement = contents.replace(options.regex, substitute, matchstart)
@@ -200,7 +206,8 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
           contents = replacement
           fileLines[fileLines.high] = replacement
       else:
-        displayMatch(contents, match[0], match[1], fgYellow, lineN)
+        displayFile(f, silent = options.silent)
+        displayMatch(contents, match[0], match[1], fgYellow, lineN, silent = options.silent)
       match = matchBounds(contents, options.regex, matchend+offset+1, flags = options.flags)
   if (not options.test) and (options.substitute != nil): 
     f.writefile(fileLines.join("\n"))
@@ -212,7 +219,7 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
 
 var duration = cpuTime()
 
-var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".", apply: false, test: false, flags: 0)
+var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".", apply: false, test: false, flags: 0, silent: false)
 
 for kind, key, val in getOpt():
   case kind:
@@ -243,6 +250,8 @@ for kind, key, val in getOpt():
           quit(0)
         of "ignore-case", "i":
           options.flags = 1
+        of "silent", "s":
+          options.silent = true
         else:
           discard
     else:
@@ -286,5 +295,3 @@ if options.substitute != nil:
   echo "=== ", count, " files processed - ", matchesN, " matches, ", subsN, " substitutions (", (cpuTime()-duration), " seconds)."
 else:
   echo "=== ", count, " files processed - ", matchesN, " matches (", (cpuTime()-duration), " seconds)."
-
-
