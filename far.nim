@@ -175,10 +175,12 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
   var contentsLen = 0
   var lineN = 0
   var fileLines = newSeq[string]()
+  var hasSubstitutions = false
   var file: File
   if not file.open(f):
     raise newException(IOError, "Unable to open file '$1'" % f)
   while file.readline(contents):
+    hasSubstitutions = false
     lineN.inc
     contentsLen = contents.len
     fileLines.add contents
@@ -199,6 +201,7 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
           stdout.write(" ")
         displayMatch(replacement, matchstart, matchend+offset, fgYellow, lineN)
         if (options.apply or confirm("Confirm replacement? [Y/n] ")):
+          hasSubstitutions = true
           subsN.inc
           contents = replacement
           fileLines[fileLines.high] = replacement
@@ -206,7 +209,7 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
         displayFile(f, silent = options.silent)
         displayMatch(contents, match[0], match[1], fgYellow, lineN, silent = options.silent)
       match = matchBounds(contents, options.regex, matchend+offset+1, flags = options.flags)
-  if (not options.test) and (options.substitute != nil): 
+  if (not options.test) and (options.substitute != nil) and hasSubstitutions: 
     f.writefile(fileLines.join("\n"))
   return [matchesN, subsN]
 
