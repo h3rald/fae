@@ -209,6 +209,7 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
         displayFile(f, silent = options.silent)
         displayMatch(contents, match[0], match[1], fgYellow, lineN, silent = options.silent)
       match = matchBounds(contents, options.regex, matchend+offset+1, flags = options.flags)
+  file.close()
   if (not options.test) and (options.substitute != nil) and hasSubstitutions: 
     f.writefile(fileLines.join("\n"))
   return [matchesN, subsN]
