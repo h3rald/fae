@@ -1,6 +1,7 @@
 import 
-  slre,
-  parseopt2,
+  packages/nim-sgregex/sgregex,
+  std/exitprocs,
+  parseopt,
   os,
   terminal,
   strutils,
@@ -11,7 +12,8 @@ type
   StringMatches = object
     start: int
     finish: int
-    captures: ptr array[0..9, Capture]
+    #captures: ptr array[0..9, Capture]
+    captures: seq[string]
   FarOptions = object
     regex: string
     recursive: bool
@@ -21,21 +23,23 @@ type
     apply: bool
     test: bool
     silent: bool
-    flags: int
 
-system.addQuitProc(resetAttributes)
+addExitProc(resetAttributes)
 
 const version = "1.1.0"
 
-const usage = """FAR v""" & version & """ - Find & Replace Utility
-  (c) 2015-2016 Fabio Cevasco
+const usage = """FAE v""" & version & """ - Find & Edit Utility
+  (c) 2015-2020 Fabio Cevasco
 
   Usage:
-    far <pattern> [<replacement>] [option1 option2 ...]
+    far [s/]<pattern>/[<replacement>/][flags] [option1 option2 ...]
 
   Where:
     <pattern>           A regular expression to search for
-    <replacement>       An optional replacement string
+    <replacoement>      An optional replacement string
+    <flags>             i: case-insensitive match
+                        m: multiline match
+                        s: treat newlines as spaces
 
   Options:
     -a, --apply         Substitute all occurrences of <pattern> with <replacement> in all files
@@ -43,7 +47,6 @@ const usage = """FAR v""" & version & """ - Find & Replace Utility
     -d, --directory     Search in the specified directory (default: .)
     -f, --filter        Specify a regular expression to filter file paths.
     -h, --help          Display this message.
-    -i, --ignore-case   Case-insensitive matching.
     -r, --recursive     Search directories recursively.
     -s, --silent        Do not display matches.
     -t, --test          Do not perform substitutions, just print results.
@@ -71,50 +74,63 @@ proc handleRegexErrors(match: int): StringBounds =
     else:
       result = [-1, match]
 
-proc matchBounds(str, regex: string, start = 0, flags = 0): StringBounds =
-  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-  var s = str.substr(start).cstring
-  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, flags.cint)
-  if match >= 0:
-    result = [match-c[0].len+start, match-1+start]
-  else:
-    result = match.handleRegexErrors()
 
-proc matchCaptures(str, regex: string, start = 0, flags = 0): StringMatches = 
-  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-  var s = str.substr(start).cstring
-  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, flags.cint)
-  if match >= 0: 
-    result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
-  else:
-    result = StringMatches(start: match, finish: match, captures: c)
+proc matchBounds(str, expr: string, start = 0): StringBounds = 
+  let s = str.substr(start)
+  let c = s =~ expr
+  let match = c.len 
+  result = [match-c[0].len+start, match-1+start]
 
-proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds], flags = 0) =
-  let match = str.matchBounds(regex, start, flags = flags)
+
+#proc old_matchBounds(str, regex: string, start = 0, flags = 0): StringBounds =
+#  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
+#  var s = str.substr(start).cstring
+#  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, flags.cint)
+#  if match >= 0:
+#    result = [match-c[0].len+start, match-1+start]
+#  else:
+#    result = match.handleRegexErrors()
+
+proc matchCaptures(str, expr: string, start = 0): StringMatches =
+  let s = str.substr(start)
+  let c = s =~ expr
+  let match = c.len 
+  result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
+
+#proc old_matchCaptures(str, regex: string, start = 0, flags = 0): StringMatches = 
+#  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
+#  var s = str.substr(start).cstring
+#  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, flags.cint)
+#  if match >= 0: 
+#    result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
+#  else:
+#    result = StringMatches(start: match, finish: match, captures: c)
+
+proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds]) =
+  let match = str.matchBounds(regex, start)
   if match[0] >= 0:
     matches.add(match)
-    matchBoundsRec(str, regex, match[1]+1, matches, flags = flags)
+    matchBoundsRec(str, regex, match[1]+1, matches)
 
-proc match(str, regex: string, flags = 0): bool = 
-  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-  return slre_match(regex.cstring, str.cstring, str.len.cint, c, 10, flags.cint) >= 0
+proc match(str, regex: string): bool = 
+  str.match(regex)
 
 proc rawReplace(str: var string, sub: string, start, finish: int) =
   str.delete(start, finish)
   str.insert(sub, start)
 
-proc replace(str, regex: string, substitute: var string, start = 0, flags = 0): string =
+proc replace(str, regex: string, substitute: var string, start = 0): string =
   var newstr = str
-  let match = str.matchCaptures(regex, start, flags = flags)
+  let match = str.matchCaptures(regex, start)
   if match.finish >= 0:
     for i in 1..9:
       # Substitute captures
       var submatches = newSeq[StringBounds](0)
-      substitute.matchBoundsRec("\\\\" & $i, 0, submatches, flags = flags)
+      substitute.matchBoundsRec("\\\\" & $i, 0, submatches)
       for submatch in submatches:
         var capture = match.captures[i]
         if capture.len > 0:
-          substitute.rawReplace(substr($capture.str, 0, (capture.len-1).int), submatch[0], submatch[1])
+          substitute.rawReplace(substr(capture, 0, (capture.len-1).int), submatch[0], submatch[1])
     newstr.rawReplace(substitute, match.start, match.finish)
   return newstr
 
@@ -161,9 +177,9 @@ proc displayFile(str: string, silent = false) =
 proc confirm(msg: string): bool = 
   stdout.write(msg)
   var answer = stdin.readLine()
-  if answer.match("y(es)?", 1):
+  if answer.match("y(es)?", "i"):
     return true
-  elif answer.match("n(o)?", 1):
+  elif answer.match("n(o)?", "i"):
     return false
   else:
     return confirm(msg)
@@ -183,14 +199,14 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
     lineN.inc
     contentsLen = contents.len
     fileLines.add contents
-    var match = matchBounds(contents, options.regex, 0, flags = options.flags)
+    var match = matchBounds(contents, options.regex, 0)
     while match[0] > 0:
       matchesN.inc
       var offset = 0
       var matchstart, matchend: int
       matchstart = match[0] 
       matchend = match[1] 
-      if options.substitute != nil:
+      if options.substitute != "":
         displayFile(f)
         displayMatch(contents, matchstart, matchend, fgRed, lineN)
         var substitute = options.substitute
@@ -207,9 +223,9 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
       else:
         displayFile(f, silent = options.silent)
         displayMatch(contents, match[0], match[1], fgYellow, lineN, silent = options.silent)
-      match = matchBounds(contents, options.regex, matchend+offset+1, flags = options.flags)
+      match = matchBounds(contents, options.regex, matchend+offset+1)
   file.close()
-  if (not options.test) and (not options.substitute.isNil) and hasSubstitutions: 
+  if (not options.test) and (options.substitute != "") and hasSubstitutions: 
     f.writefile(fileLines.join("\n"))
   return [matchesN, subsN]
 
@@ -219,16 +235,16 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
 
 var duration = cpuTime()
 
-var options = FarOptions(regex: nil, recursive: false, filter: nil, substitute: nil, directory: ".", apply: false, test: false, flags: 0, silent: false)
+var options = FarOptions(regex: "", recursive: false, filter: "", substitute: "", directory: ".", apply: false, test: false, silent: false)
 
 for kind, key, val in getOpt():
   case kind:
     of cmdArgument:
-      if options.regex == nil:
+      if options.regex == "":
         options.regex = key
-      elif options.substitute == nil:
+      elif options.substitute == "":
         options.substitute = key
-      elif options.regex == nil and options.substitute == nil:
+      elif options.regex == "" and options.substitute == "":
         quit("Too many arguments", 1)
     of cmdLongOption, cmdShortOption:
       case key:
@@ -248,8 +264,6 @@ for kind, key, val in getOpt():
         of "version", "v":
           echo version
           quit(0)
-        of "ignore-case", "i":
-          options.flags = 1
         of "silent", "s":
           options.silent = true
         else:
@@ -257,7 +271,7 @@ for kind, key, val in getOpt():
     else:
       discard
 
-if options.regex == nil:
+if options.regex == "":
   echo usage
   quit(0)
 
@@ -270,7 +284,7 @@ var res: array[0..1, int]
 
 if options.recursive:
   for f in walkDirRec(options.directory):
-    if options.filter == nil or f.match(options.filter):
+    if options.filter == "" or f.match(options.filter):
       try:
         count.inc
         res = processFile(f, options)
@@ -281,7 +295,7 @@ if options.recursive:
         continue
 else:
   for kind, f in walkDir(options.directory):
-    if kind == pcFile and (options.filter == nil or f.match(options.filter)):
+    if kind == pcFile and (options.filter == "" or f.match(options.filter)):
       try:
         count.inc
         res = processFile(f, options)
@@ -291,7 +305,7 @@ else:
         stderr.writeLine getCurrentExceptionMsg()
         continue
 
-if options.substitute != nil:
+if options.substitute != "":
   echo "=== ", count, " files processed - ", matchesN, " matches, ", subsN, " substitutions (", (cpuTime()-duration), " seconds)."
 else:
   echo "=== ", count, " files processed - ", matchesN, " matches (", (cpuTime()-duration), " seconds)."
