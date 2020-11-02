@@ -12,10 +12,10 @@ type
   StringMatches = object
     start: int
     finish: int
-    #captures: ptr array[0..9, Capture]
     captures: seq[string]
-  FarOptions = object
+  FaeOptions = object
     regex: string
+    insensitive: bool
     recursive: bool
     filter: string
     substitute: string
@@ -54,9 +54,15 @@ const usage = """FAE v""" & version & """ - Find & Edit Utility
     -v, --version       Display the program version.
 """
 
-proc matchBounds(str, expr: string, start = 0): StringBounds = 
+proc flags(opt: FaeOptions): string = 
+  if options.insensitive:
+    "i"
+  else:
+    ""
+
+proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBounds = 
   let s = str.substr(start)
-  let c = s =~ expr
+  let c = s.search(expr, options.flags)
   let match = c.len 
   result = [match-c[0].len+start, match-1+start]
 
@@ -70,9 +76,9 @@ proc matchBounds(str, expr: string, start = 0): StringBounds =
 #  else:
 #    result = match.handleRegexErrors()
 
-proc matchCaptures(str, expr: string, start = 0): StringMatches =
+proc matchCaptures(str, expr: string, start = 0, options: FaeOptions): StringMatches =
   let s = str.substr(start)
-  let c = s =~ expr
+  let c = s.search(expr, options.flags)
   let match = c.len 
   result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
 
@@ -85,8 +91,8 @@ proc matchCaptures(str, expr: string, start = 0): StringMatches =
 #  else:
 #    result = StringMatches(start: match, finish: match, captures: c)
 
-proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds]) =
-  let match = str.matchBounds(regex, start)
+proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds], options: FaeOptions) =
+  let match = str.matchBounds(regex, start, options)
   if match[0] >= 0:
     matches.add(match)
     matchBoundsRec(str, regex, match[1]+1, matches)
@@ -98,20 +104,24 @@ proc rawReplace(str: var string, sub: string, start, finish: int) =
   str.delete(start, finish)
   str.insert(sub, start)
 
+
 proc replace(str, regex: string, substitute: var string, start = 0): string =
-  var newstr = str
-  let match = str.matchCaptures(regex, start)
-  if match.finish >= 0:
-    for i in 1..9:
-      # Substitute captures
-      var submatches = newSeq[StringBounds](0)
-      substitute.matchBoundsRec("\\\\" & $i, 0, submatches)
-      for submatch in submatches:
-        var capture = match.captures[i]
-        if capture.len > 0:
-          substitute.rawReplace(substr(capture, 0, (capture.len-1).int), submatch[0], submatch[1])
-    newstr.rawReplace(substitute, match.start, match.finish)
-  return newstr
+  return sgregex.replace(str, regex, substitute)
+
+#proc old_replace(str, regex: string, substitute: var string, start = 0): string =
+#  var newstr = str
+#  let match = str.matchCaptures(regex, start)
+#  if match.finish >= 0:
+#    for i in 1..9:
+#      # Substitute captures
+#      var submatches = newSeq[StringBounds](0)
+#      substitute.matchBoundsRec("\\\\" & $i, 0, submatches)
+#      for submatch in submatches:
+#        var capture = match.captures[i]
+#        if capture.len > 0:
+#          substitute.rawReplace(substr(capture, 0, (capture.len-1).int), submatch[0], submatch[1])
+#    newstr.rawReplace(substitute, match.start, match.finish)
+#  return newstr
 
 proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int, silent = false) =
   if silent:
@@ -163,7 +173,7 @@ proc confirm(msg: string): bool =
   else:
     return confirm(msg)
 
-proc processFile(f:string, options: FarOptions): array[0..1, int] =
+proc processFile(f:string, options: FaeOptions): array[0..1, int] =
   var matchesN = 0
   var subsN = 0
   var contents = ""
@@ -178,7 +188,7 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
     lineN.inc
     contentsLen = contents.len
     fileLines.add contents
-    var match = matchBounds(contents, options.regex, 0)
+    var match = matchBounds(contents, options.regex, 0, options)
     while match[0] > 0:
       matchesN.inc
       var offset = 0
@@ -214,7 +224,7 @@ proc processFile(f:string, options: FarOptions): array[0..1, int] =
 
 var duration = cpuTime()
 
-var options = FarOptions(regex: "", recursive: false, filter: "", substitute: "", directory: ".", apply: false, test: false, silent: false)
+var options = FaeOptions(regex: "", insensitive: false, recursive: false, filter: "", substitute: "", directory: ".", apply: false, test: false, silent: false)
 
 for kind, key, val in getOpt():
   case kind:
@@ -243,6 +253,8 @@ for kind, key, val in getOpt():
         of "version", "v":
           echo version
           quit(0)
+        of "insensitive", "i":
+          options.insensitive = true
         of "silent", "s":
           options.silent = true
         else:
