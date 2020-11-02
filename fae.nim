@@ -32,7 +32,7 @@ const usage = """FAE v""" & version & """ - Find & Edit Utility
   (c) 2015-2020 Fabio Cevasco
 
   Usage:
-    far [s/]<pattern>/[<replacement>/][flags] [option1 option2 ...]
+    fae <pattern> <replacement> [option1 option2 ...]
 
   Where:
     <pattern>           A regular expression to search for
@@ -47,33 +47,12 @@ const usage = """FAE v""" & version & """ - Find & Edit Utility
     -d, --directory     Search in the specified directory (default: .)
     -f, --filter        Specify a regular expression to filter file paths.
     -h, --help          Display this message.
+    -i, --insensitive   Case-insensitive matching.
     -r, --recursive     Search directories recursively.
     -s, --silent        Do not display matches.
     -t, --test          Do not perform substitutions, just print results.
     -v, --version       Display the program version.
 """
-
-proc handleRegexErrors(match: int): StringBounds =
-  case match:
-    of -2:
-      quit("Regex Error: Unexpected quantifier", match)
-    of -3:
-      quit("Regex Error: Unbalanced brackets", match)
-    of -4:
-      quit("Regex Error: Internal error", match)
-    of -5:
-      quit("Regex Error: Invalid character set", match)
-    of -6:
-      quit("Regex Error: Invalid metacharacter", match)
-    of -7:
-      quit("Regex Error: Too many captures (max: 9)", match)
-    of -8:
-      quit("Regex Error: Too many branches", match)
-    of -9:
-      quit("Regex Error: Too many brackets", match)
-    else:
-      result = [-1, match]
-
 
 proc matchBounds(str, expr: string, start = 0): StringBounds = 
   let s = str.substr(start)
