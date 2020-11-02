@@ -1,2 +1,2 @@
-# far
-Find and Replace Utility
+# fae
+Find and Edit Utility
