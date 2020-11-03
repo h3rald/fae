@@ -68,8 +68,10 @@ proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBound
   if c.len > 0:
     let match = c[0]
     let mstart = s.find(match)
-    let mfinish = mstart + match.len
-    result = [mstart, mfinish]
+    let mfinish = mstart + match.len-1
+    result = [mstart+start, mfinish+start]
+    echo match, start, "-----"
+    discard quit
   else:
     result = [-1, -1]
 
@@ -133,7 +135,6 @@ proc replace(str, regex: string, substitute: var string, start = 0, options: Fae
 proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int, silent = false) =
   if silent:
     return
-  echo start, " - ", finish, "<<<"
   let max_extra_chars = 20
   let context_start = max(start-max_extra_chars, 0)
   let context_finish = min(finish+max_extra_chars, str.len)
@@ -198,10 +199,10 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
     contentsLen = contents.len
     fileLines.add contents
     var match = matchBounds(contents, options.regex, 0, options)
+    var matchstart, matchend: int
+    var offset = 0
     while match[0] >= 0:
       matchesN.inc
-      var offset = 0
-      var matchstart, matchend: int
       matchstart = match[0] 
       matchend = match[1] 
       if options.substitute != "":
@@ -221,6 +222,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
       else:
         displayFile(f, silent = options.silent)
         displayMatch(contents, matchstart, matchend, fgYellow, lineN, silent = options.silent)
+      echo "match:", match, "matchend: ", matchend, "contents: ", contents
       match = matchBounds(contents, options.regex, matchend+offset+1, options)
   file.close()
   if (not options.test) and (options.substitute != "") and hasSubstitutions: 
