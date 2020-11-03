@@ -36,10 +36,7 @@ const usage = """FAE v""" & version & """ - Find & Edit Utility
 
   Where:
     <pattern>           A regular expression to search for
-    <replacoement>      An optional replacement string
-    <flags>             i: case-insensitive match
-                        m: multiline match
-                        s: treat newlines as spaces
+    <replacement>      An optional replacement string
 
   Options:
     -a, --apply         Substitute all occurrences of <pattern> with <replacement> in all files
@@ -59,19 +56,24 @@ proc flags(options: FaeOptions): string =
     "i"
   else:
     ""
+    
+var tc = 0
 
 proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBounds = 
   if start > str.len-2:
     return [-1, -1]
   let s = str.substr(start)
   let c = s.search(expr, options.flags)
-  if c.len > 0:
+  if c[0].len > 0:
     let match = c[0]
-    let mstart = s.find(match)
+    let mstart = strutils.find(s, match)
+    if mstart < 0:
+      return [-1, -1]
     let mfinish = mstart + match.len-1
     result = [mstart+start, mfinish+start]
-    echo match, start, "-----"
-    discard quit
+    tc.inc
+    if tc > 4:
+      quit(0)
   else:
     result = [-1, -1]
 
@@ -157,11 +159,11 @@ proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int,
   for i in 0 .. (context.len):
     if i == match_context_start:
       setForegroundColor(color, true)
-    if i == match_context_finish:
-      resetAttributes()
     if i < context.len:
       stdout.write(context[i])
-  stdout.write("\n")
+    if i == match_context_finish:
+      resetAttributes()
+  stdout.write("\p")
 
 proc displayFile(str: string, silent = false) =
   if silent:
@@ -222,11 +224,10 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
       else:
         displayFile(f, silent = options.silent)
         displayMatch(contents, matchstart, matchend, fgYellow, lineN, silent = options.silent)
-      echo "match:", match, "matchend: ", matchend, "contents: ", contents
       match = matchBounds(contents, options.regex, matchend+offset+1, options)
   file.close()
   if (not options.test) and (options.substitute != "") and hasSubstitutions: 
-    f.writefile(fileLines.join("\n"))
+    f.writefile(fileLines.join("\p"))
   return [matchesN, subsN]
 
 ## MAIN
@@ -304,9 +305,9 @@ else:
         matchesN = matchesN + res[0]
         subsN = subsN + res[1]
       except:
+        echo matchesN, "-------"
         stderr.writeLine getCurrentExceptionMsg()
         continue
-
 if options.substitute != "":
   echo "=== ", count, " files processed - ", matchesN, " matches, ", subsN, " substitutions (", (cpuTime()-duration), " seconds)."
 else:
