@@ -54,17 +54,24 @@ const usage = """FAE v""" & version & """ - Find & Edit Utility
     -v, --version       Display the program version.
 """
 
-proc flags(opt: FaeOptions): string = 
+proc flags(options: FaeOptions): string = 
   if options.insensitive:
     "i"
   else:
     ""
 
 proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBounds = 
+  if start > str.len-2:
+    return [-1, -1]
   let s = str.substr(start)
   let c = s.search(expr, options.flags)
-  let match = c.len 
-  result = [match-c[0].len+start, match-1+start]
+  if c.len > 0:
+    let match = c[0]
+    let mstart = s.find(match)
+    let mfinish = mstart + match.len
+    result = [mstart, mfinish]
+  else:
+    result = [-1, -1]
 
 
 #proc old_matchBounds(str, regex: string, start = 0, flags = 0): StringBounds =
@@ -95,7 +102,7 @@ proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds
   let match = str.matchBounds(regex, start, options)
   if match[0] >= 0:
     matches.add(match)
-    matchBoundsRec(str, regex, match[1]+1, matches)
+    matchBoundsRec(str, regex, match[1]+1, matches, options)
 
 proc match(str, regex: string): bool = 
   str.match(regex)
@@ -105,8 +112,8 @@ proc rawReplace(str: var string, sub: string, start, finish: int) =
   str.insert(sub, start)
 
 
-proc replace(str, regex: string, substitute: var string, start = 0): string =
-  return sgregex.replace(str, regex, substitute)
+proc replace(str, regex: string, substitute: var string, start = 0, options: FaeOptions): string =
+  return sgregex.replace(str, regex, substitute, options.flags)
 
 #proc old_replace(str, regex: string, substitute: var string, start = 0): string =
 #  var newstr = str
@@ -126,14 +133,15 @@ proc replace(str, regex: string, substitute: var string, start = 0): string =
 proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int, silent = false) =
   if silent:
     return
+  echo start, " - ", finish, "<<<"
   let max_extra_chars = 20
   let context_start = max(start-max_extra_chars, 0)
   let context_finish = min(finish+max_extra_chars, str.len)
   let match: string = str.substr(start, finish)
   var context: string = str.substr(context_start, context_finish)
-  if context_start > 0:
+  if context_start > 2:
     context = "..." & context
-  if context_finish < str.len:
+  if context_finish < str.len + 3:
     context = context & "..."
   let match_context_start:int = strutils.find(context, match, start-context_start)
   let match_context_finish:int = match_context_start+match.len
@@ -145,12 +153,13 @@ proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int,
   resetAttributes()
   stdout.write(": ")
   #context = strutils.replace(context, "\n", " ")
-  for i in 0..context.len:
+  for i in 0 .. (context.len):
     if i == match_context_start:
       setForegroundColor(color, true)
     if i == match_context_finish:
       resetAttributes()
-    stdout.write(context[i])
+    if i < context.len:
+      stdout.write(context[i])
   stdout.write("\n")
 
 proc displayFile(str: string, silent = false) =
@@ -158,7 +167,7 @@ proc displayFile(str: string, silent = false) =
     return
   stdout.write "["
   setForegroundColor(fgGreen, true)
-  for i in 0..str.len:
+  for i in 0..str.len-1:
     stdout.write(str[i])
   resetAttributes()
   stdout.write "]"
@@ -189,7 +198,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
     contentsLen = contents.len
     fileLines.add contents
     var match = matchBounds(contents, options.regex, 0, options)
-    while match[0] > 0:
+    while match[0] >= 0:
       matchesN.inc
       var offset = 0
       var matchstart, matchend: int
@@ -199,7 +208,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
         displayFile(f)
         displayMatch(contents, matchstart, matchend, fgRed, lineN)
         var substitute = options.substitute
-        var replacement = contents.replace(options.regex, substitute, matchstart)
+        var replacement = contents.replace(options.regex, substitute, matchstart, options)
         offset = substitute.len-(matchend-matchstart+1)
         for i in 0..(f.len+1):
           stdout.write(" ")
@@ -211,8 +220,8 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
           fileLines[fileLines.high] = replacement
       else:
         displayFile(f, silent = options.silent)
-        displayMatch(contents, match[0], match[1], fgYellow, lineN, silent = options.silent)
-      match = matchBounds(contents, options.regex, matchend+offset+1)
+        displayMatch(contents, matchstart, matchend, fgYellow, lineN, silent = options.silent)
+      match = matchBounds(contents, options.regex, matchend+offset+1, options)
   file.close()
   if (not options.test) and (options.substitute != "") and hasSubstitutions: 
     f.writefile(fileLines.join("\n"))
