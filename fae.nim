@@ -57,8 +57,6 @@ proc flags(options: FaeOptions): string =
   else:
     ""
     
-var tc = 0
-
 proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBounds = 
   if start > str.len-2:
     return [-1, -1]
@@ -71,21 +69,8 @@ proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBound
       return [-1, -1]
     let mfinish = mstart + match.len-1
     result = [mstart+start, mfinish+start]
-    tc.inc
-    if tc > 4:
-      quit(0)
   else:
     result = [-1, -1]
-
-
-#proc old_matchBounds(str, regex: string, start = 0, flags = 0): StringBounds =
-#  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-#  var s = str.substr(start).cstring
-#  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, flags.cint)
-#  if match >= 0:
-#    result = [match-c[0].len+start, match-1+start]
-#  else:
-#    result = match.handleRegexErrors()
 
 proc matchCaptures(str, expr: string, start = 0, options: FaeOptions): StringMatches =
   let s = str.substr(start)
@@ -93,23 +78,11 @@ proc matchCaptures(str, expr: string, start = 0, options: FaeOptions): StringMat
   let match = c.len 
   result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
 
-#proc old_matchCaptures(str, regex: string, start = 0, flags = 0): StringMatches = 
-#  var c  = cast[ptr array[0..9,Capture]](alloc0(sizeof(array[0..9, Capture])))
-#  var s = str.substr(start).cstring
-#  let match = slre_match(("(" & regex & ")").cstring, s, s.len.cint, c, 10, flags.cint)
-#  if match >= 0: 
-#    result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
-#  else:
-#    result = StringMatches(start: match, finish: match, captures: c)
-
 proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds], options: FaeOptions) =
   let match = str.matchBounds(regex, start, options)
   if match[0] >= 0:
     matches.add(match)
     matchBoundsRec(str, regex, match[1]+1, matches, options)
-
-proc match(str, regex: string): bool = 
-  str.match(regex)
 
 proc rawReplace(str: var string, sub: string, start, finish: int) =
   str.delete(start, finish)
@@ -169,7 +142,7 @@ proc displayFile(str: string, silent = false) =
   if silent:
     return
   stdout.write "["
-  setForegroundColor(fgGreen, true)
+  setForegroundColor(fgYellow, true)
   for i in 0..str.len-1:
     stdout.write(str[i])
   resetAttributes()
