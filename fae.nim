@@ -9,10 +9,6 @@ import
 
 type
   StringBounds = array[0..1, int]
-  StringMatches = object
-    start: int
-    finish: int
-    captures: seq[string]
   FaeOptions = object
     regex: string
     insensitive: bool
@@ -72,40 +68,14 @@ proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBound
   else:
     result = [-1, -1]
 
-proc matchCaptures(str, expr: string, start = 0, options: FaeOptions): StringMatches =
-  let s = str.substr(start)
-  let c = s.search(expr, options.flags)
-  let match = c.len 
-  result = StringMatches(start: match-c[0].len+start, finish: match-1+start, captures: c)
-
 proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds], options: FaeOptions) =
   let match = str.matchBounds(regex, start, options)
   if match[0] >= 0:
     matches.add(match)
     matchBoundsRec(str, regex, match[1]+1, matches, options)
 
-proc rawReplace(str: var string, sub: string, start, finish: int) =
-  str.delete(start, finish)
-  str.insert(sub, start)
-
-
 proc replace(str, regex: string, substitute: var string, start = 0, options: FaeOptions): string =
   return sgregex.replace(str, regex, substitute, options.flags)
-
-#proc old_replace(str, regex: string, substitute: var string, start = 0): string =
-#  var newstr = str
-#  let match = str.matchCaptures(regex, start)
-#  if match.finish >= 0:
-#    for i in 1..9:
-#      # Substitute captures
-#      var submatches = newSeq[StringBounds](0)
-#      substitute.matchBoundsRec("\\\\" & $i, 0, submatches)
-#      for submatch in submatches:
-#        var capture = match.captures[i]
-#        if capture.len > 0:
-#          substitute.rawReplace(substr(capture, 0, (capture.len-1).int), submatch[0], submatch[1])
-#    newstr.rawReplace(substitute, match.start, match.finish)
-#  return newstr
 
 proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int, silent = false) =
   if silent:
@@ -121,14 +91,11 @@ proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int,
     context = context & "..."
   let match_context_start:int = strutils.find(context, match, start-context_start)
   let match_context_finish:int = match_context_start+match.len
-  #let lineN = $str.countLines(0, finish+1)
   stdout.write(" ")
   setForegroundColor(color, true)
-  #for i in 0..lineN:
   stdout.write(lineN)
   resetAttributes()
   stdout.write(": ")
-  #context = strutils.replace(context, "\n", " ")
   for i in 0 .. (context.len):
     if i == match_context_start:
       setForegroundColor(color, true)
@@ -188,7 +155,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
         offset = substitute.len-(matchend-matchstart+1)
         for i in 0..(f.len+1):
           stdout.write(" ")
-        displayMatch(replacement, matchstart, matchend+offset, fgYellow, lineN)
+        displayMatch(replacement, matchstart, matchend+offset, fgGreen, lineN)
         if (options.apply or confirm("Confirm replacement? [y/n] ")):
           hasSubstitutions = true
           subsN.inc
@@ -196,7 +163,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
           fileLines[fileLines.high] = replacement
       else:
         displayFile(f, silent = options.silent)
-        displayMatch(contents, matchstart, matchend, fgYellow, lineN, silent = options.silent)
+        displayMatch(contents, matchstart, matchend, fgGreen, lineN, silent = options.silent)
       match = matchBounds(contents, options.regex, matchend+offset+1, options)
   file.close()
   if (not options.test) and (options.substitute != "") and hasSubstitutions: 
