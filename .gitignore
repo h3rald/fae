@@ -1,4 +1,3 @@
-nimcache
-packages
+packages/
 fae
-test
+test/

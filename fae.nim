@@ -22,10 +22,10 @@ type
 
 addExitProc(resetAttributes)
 
-const version = "1.1.0"
+const version = "1.0.0"
 
 const usage = """FAE v""" & version & """ - Find & Edit Utility
-  (c) 2015-2020 Fabio Cevasco
+  (c) 2020 Fabio Cevasco
 
   Usage:
     fae <pattern> <replacement> [option1 option2 ...]
