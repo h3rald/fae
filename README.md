@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/github/release/h3rald/fae.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/h3rald/fae/master/LICENSE)
 
-# fae 🧚 Find & Edit Utility v1.0.0
+# fae 🧚 Find & Edit Utility
 
 ```
   (c) 2020 Fabio Cevasco
