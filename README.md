@@ -1,5 +1,5 @@
-# FAE v1.0.0 - Find & Edit Utility
-  
+# Fae (Find & Edit Utility) v1.0.0
+
 ```
   (c) 2020 Fabio Cevasco
 
