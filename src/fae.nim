@@ -1,11 +1,12 @@
 import 
-  packages/nim-sgregex/sgregex,
+  ../packages/nim-sgregex/sgregex,
   std/exitprocs,
   parseopt,
   os,
   terminal,
   strutils,
-  times
+  times,
+  faepkg/config
 
 type
   StringBounds = array[0..1, int]
@@ -22,22 +23,21 @@ type
 
 addExitProc(resetAttributes)
 
-const version = "1.0.0"
-
-const usage = """FAE v""" & version & """ - Find & Edit Utility
-  (c) 2020 Fabio Cevasco
+const usage = appName & """ (""" & appDescription & """) v""" & appVersion & """
+  (c) 2020 """ & appAuthor & """
 
   Usage:
     fae <pattern> <replacement> [option1 option2 ...]
 
   Where:
-    <pattern>           A regular expression to search for
-    <replacement>      An optional replacement string
+    <pattern>           A regular expression to search for.
+    <replacement>       An optional replacement string 
+                        (use \1, \2, etc. to reference captured groups).
 
   Options:
-    -a, --apply         Substitute all occurrences of <pattern> with <replacement> in all files
-                        without asking for confirmation.
-    -d, --directory     Search in the specified directory (default: .)
+    -a, --apply         Substitute all occurrences of <pattern> with <replacement>
+                        in all files without asking for confirmation.
+    -d, --directory     Search in the specified directory (default: .).
     -f, --filter        Specify a regular expression to filter file paths.
     -h, --help          Display this message.
     -i, --insensitive   Case-insensitive matching.
@@ -203,7 +203,7 @@ for kind, key, val in getOpt():
           echo usage
           quit(0)
         of "version", "v":
-          echo version
+          echo appVersion
           quit(0)
         of "insensitive", "i":
           options.insensitive = true
