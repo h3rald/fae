@@ -6,17 +6,16 @@
 # fae 🧚 Find & Edit Utility
 
 ```
-  (c) 2020 Fabio Cevasco
-
   Usage:
     fae <pattern> <replacement> [option1 option2 ...]
 
   Where:
-    <pattern>           A regular expression to search for
-    <replacement>      An optional replacement string
+    <pattern>           A regular expression to search for.
+    <replacement>       An optional replacement string 
+                        (use \1, \2, etc. to reference captured groups).
 
   Options:
-    -a, --apply         Substitute all occurrences of <pattern> with <replacement> in all files
+    -a, --apply         Substitute all occurrences of <pattern> with <replacement> in all files.
                         without asking for confirmation.
     -d, --directory     Search in the specified directory (default: .)
     -f, --filter        Specify a regular expression to filter file paths.
