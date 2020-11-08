@@ -1,3 +1,8 @@
+[![Nimble](https://raw.githubusercontent.com/yglukhov/nimble-tag/master/nimble.png)](https://github.com/h3rald/fae)
+
+[![Release](https://img.shields.io/github/release/h3rald/fae.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/h3rald/fae/master/LICENSE)
+
 # fae 🧚 Find & Edit Utility v1.0.0
 
 ```
