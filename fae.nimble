@@ -24,11 +24,7 @@ installExt    = @["nim", "c", "h"]
 
 # Dependencies
 
-requires "nim >= 1.4.0", "nifty"
-
-before install:
-  exec "nimble install nifty"
-  exec "nifty install"
+requires "nim >= 1.4.0"
 
 # Build
 

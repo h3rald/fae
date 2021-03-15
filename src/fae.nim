@@ -1,5 +1,5 @@
 import 
-  ../packages/nim-sgregex/sgregex,
+  nre,
   std/exitprocs,
   parseopt,
   os,
@@ -12,7 +12,6 @@ type
   StringBounds = array[0..1, int]
   FaeOptions = object
     regex: string
-    insensitive: bool
     recursive: bool
     filter: string
     substitute: string
@@ -21,18 +20,25 @@ type
     test: bool
     silent: bool
 
+when defined(windows): 
+  {.passL: "-static -Lfaepkg/vendor/pcre/windows -lpcre".}
+elif defined(linux):
+  {.passL: "-static -Lfaepkg/vendor/pcre/linux -lpcre".}
+elif defined(macosx):
+  {.passL: "-Bstatic -Lfaepkg/vendor/pcre/macosx -lpcre -Bdynamic".}
+
 addExitProc(resetAttributes)
 
 const usage = appName & """ (""" & appDescription & """) v""" & appVersion & """
-  (c) 2020 """ & appAuthor & """
+  (c) 2020-2021 """ & appAuthor & """
 
   Usage:
-    fae <pattern> <replacement> [option1 option2 ...]
+    fae <pattern> [<replacement> option1 option2 ...]
 
   Where:
-    <pattern>           A regular expression to search for.
+    <pattern>           A Perl-compatible regular expression to search for.
     <replacement>       An optional replacement string 
-                        (use \1, \2, etc. to reference captured groups).
+                        (use $1, $2, etc. to reference captured groups).
 
   Options:
     -a, --apply         Substitute all occurrences of <pattern> with <replacement>
@@ -40,33 +46,26 @@ const usage = appName & """ (""" & appDescription & """) v""" & appVersion & """
     -d, --directory     Search in the specified directory (default: .).
     -f, --filter        Specify a regular expression to filter file paths.
     -h, --help          Display this message.
-    -i, --insensitive   Case-insensitive matching.
     -r, --recursive     Search directories recursively.
     -s, --silent        Do not display matches.
     -t, --test          Do not perform substitutions, just print results.
     -v, --version       Display the program version.
 """
 
-proc flags(options: FaeOptions): string = 
-  if options.insensitive:
-    "i"
-  else:
-    ""
-    
-proc matchBounds(str, expr: string, start = 0, options: FaeOptions): StringBounds = 
+proc matchBounds(str, reg: string, start = 0, options: FaeOptions): StringBounds = 
   if start > str.len-2:
     return [-1, -1]
   let s = str.substr(start)
-  let c = s.search(expr, options.flags)
-  if c[0].len > 0:
-    let match = c[0]
+  let m = nre.find(s, re(reg))
+  if m.isNone:
+    result = [-1, 1]
+  else:
+    let match = m.get.match
     let mstart = strutils.find(s, match)
     if mstart < 0:
       return [-1, -1]
     let mfinish = mstart + match.len-1
     result = [mstart+start, mfinish+start]
-  else:
-    result = [-1, -1]
 
 proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds], options: FaeOptions) =
   let match = str.matchBounds(regex, start, options)
@@ -74,15 +73,15 @@ proc matchBoundsRec(str, regex: string, start = 0, matches: var seq[StringBounds
     matches.add(match)
     matchBoundsRec(str, regex, match[1]+1, matches, options)
 
-proc replace(str, regex: string, substitute: var string, start = 0, options: FaeOptions): string =
-  return sgregex.replace(str, regex, substitute, options.flags)
+proc replace(str, reg: string, substitute: var string, start = 0): string =
+  return nre.replace(str, re(reg), substitute)
 
 proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int, silent = false) =
   if silent:
     return
   let max_extra_chars = 20
   let context_start = max(start-max_extra_chars, 0)
-  let context_finish = min(finish+max_extra_chars, str.len)
+  let context_finish = min(finish+max_extra_chars, str.len-1)
   let match: string = str.substr(start, finish)
   var context: string = str.substr(context_start, context_finish)
   if context_start > 2:
@@ -90,7 +89,7 @@ proc displayMatch(str: string, start, finish: int, color = fgYellow, lineN: int,
   if context_finish < str.len + 3:
     context = context & "..."
   let match_context_start:int = strutils.find(context, match, start-context_start)
-  let match_context_finish:int = match_context_start+match.len
+  let match_context_finish:int = match_context_start+match.len-1
   stdout.write(" ")
   setForegroundColor(color, true)
   stdout.write(lineN)
@@ -118,9 +117,9 @@ proc displayFile(str: string, silent = false) =
 proc confirm(msg: string): bool = 
   stdout.write(msg)
   var answer = stdin.readLine()
-  if answer.match("y(es)?", "i"):
+  if answer.find(re"(?i)y(es)?").isSome:
     return true
-  elif answer.match("n(o)?", "i"):
+  elif answer.find(re"(?)n(o)?").isSome:
     return false
   else:
     return confirm(msg)
@@ -151,7 +150,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
         displayFile(f)
         displayMatch(contents, matchstart, matchend, fgRed, lineN)
         var substitute = options.substitute
-        var replacement = contents.replace(options.regex, substitute, matchstart, options)
+        var replacement = contents.replace(options.regex, substitute, matchstart)
         offset = substitute.len-(matchend-matchstart+1)
         for i in 0..(f.len+1):
           stdout.write(" ")
@@ -176,7 +175,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
 
 var duration = cpuTime()
 
-var options = FaeOptions(regex: "", insensitive: false, recursive: false, filter: "", substitute: "", directory: ".", apply: false, test: false, silent: false)
+var options = FaeOptions(regex: "", recursive: false, filter: "", substitute: "", directory: ".", apply: false, test: false, silent: false)
 
 for kind, key, val in getOpt():
   case kind:
@@ -205,8 +204,6 @@ for kind, key, val in getOpt():
         of "version", "v":
           echo appVersion
           quit(0)
-        of "insensitive", "i":
-          options.insensitive = true
         of "silent", "s":
           options.silent = true
         else:
@@ -227,7 +224,7 @@ var res: array[0..1, int]
 
 if options.recursive:
   for f in walkDirRec(options.directory):
-    if options.filter == "" or f.match(options.filter):
+    if options.filter == "" or f.match(re(options.filter)).isSome:
       try:
         count.inc
         res = processFile(f, options)
@@ -238,7 +235,7 @@ if options.recursive:
         continue
 else:
   for kind, f in walkDir(options.directory):
-    if kind == pcFile and (options.filter == "" or f.match(options.filter)):
+    if kind == pcFile and (options.filter == "" or f.match(re(options.filter)).isSome):
       try:
         count.inc
         res = processFile(f, options)
