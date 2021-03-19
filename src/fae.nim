@@ -22,11 +22,11 @@ type
     silent: bool
 
 when defined(windows): 
-  {.passL: "-static -Lfaepkg/vendor/pcre/windows -lpcre".}
+  {.passL: "-static -Lsrc/faepkg/vendor/pcre/windows -lpcre".}
 elif defined(linux):
-  {.passL: "-static -Lfaepkg/vendor/pcre/linux -lpcre".}
+  {.passL: "-static -Lsrc/faepkg/vendor/pcre/linux -lpcre".}
 elif defined(macosx):
-  {.passL: "-Bstatic -Lfaepkg/vendor/pcre/macosx -lpcre -Bdynamic".}
+  {.passL: "-Bstatic -Lsrc/faepkg/vendor/pcre/macosx -lpcre -Bdynamic".}
 
 addExitProc(resetAttributes)
 
@@ -151,7 +151,7 @@ proc processFile(f:string, options: FaeOptions): array[0..1, int] =
         displayFile(f)
         displayMatch(contents, matchstart, matchend, fgRed, lineN)
         var substitute = options.substitute
-        var replacement = contents.replace(options.regex, substitute, matchstart, options)
+        var replacement = contents.replace(options.regex, substitute, matchstart)
         offset = substitute.len-(matchend-matchstart+1)
         for i in 0..(f.len+1):
           stdout.write(" ")
