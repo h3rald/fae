@@ -1,7 +1,7 @@
-[![Nimble](https://raw.githubusercontent.com/yglukhov/nimble-tag/master/nimble.png)](https://github.com/h3rald/fae)
+[![Nimble](https://raw.githubusercontent.com/yglukhov/nimble-tag/master/nimble.png)](https://nimble.directory/pkg/fae)
 
-[![Release](https://img.shields.io/github/release/h3rald/fae.svg)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/h3rald/fae/master/LICENSE)
+[![Release](https://img.shields.io/github/release/h3rald/fae.svg)](https://github.com/h3rald/fae/releases/latest)
+[![License](https://img.shields.io/github/license/h3rald/fae.svg)](https://raw.githubusercontent.com/h3rald/fae/master/LICENSE)
 
 # fae 🧚 Find & Edit Utility
 
@@ -11,7 +11,7 @@
 
   Where:
     <pattern>           A regular expression to search for.
-    <replacement>       An optional replacement string 
+    <replacement>       An optional replacement string
                         (use \1, \2, etc. to reference captured groups).
 
   Options:
