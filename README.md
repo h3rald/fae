@@ -5,7 +5,7 @@
 
 # fae 🧚 Find & Edit Utility
 
-```
+<pre><code>
   Usage:
     fae <pattern> <replacement> [option1 option2 ...]
 
@@ -25,4 +25,4 @@
     -s, --silent        Do not display matches.
     -t, --test          Do not perform substitutions, just print results.
     -v, --version       Display the program version.
-```
+</code></pre>
