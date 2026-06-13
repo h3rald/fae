@@ -1,3 +1,5 @@
+**Important** This project was moved to [sourcehut](https://git.sr.ht/~h3rald/fae) on 2026-06-13.
+
 [![Nimble](https://raw.githubusercontent.com/yglukhov/nimble-tag/master/nimble.png)](https://nimble.directory/pkg/fae)
 
 [![Release](https://img.shields.io/github/release/h3rald/fae.svg)](https://github.com/h3rald/fae/releases/latest)
